@@ -106,14 +106,6 @@ header h1 span{color:var(--muted);font-weight:500;font-size:12px;display:block;m
 .editrow button.del{color:var(--danger);}
 .editrow button.del.armed{background:var(--danger);color:#3b0a0a;border-color:var(--danger);}
 .swatch{flex:0 0 auto;width:34px;border-radius:9px;border:1px solid var(--line);cursor:pointer;padding:0;}
-.grip{flex:0 0 auto;width:44px;background:var(--panel);border:1px solid var(--line);
-  color:var(--muted);border-radius:9px;font-size:19px;line-height:1;font-family:inherit;
-  cursor:grab;padding:0;touch-action:none;-webkit-user-select:none;user-select:none;}
-.grip:active{cursor:grabbing;background:#26334c;color:var(--txt);}
-.cat.dragging{opacity:.92;outline:2px solid var(--accent);outline-offset:-2px;
-  box-shadow:0 10px 26px rgba(0,0,0,.55);transform:scale(1.015);position:relative;z-index:5;}
-body.dragging-on{cursor:grabbing;}
-body.dragging-on .cats{scroll-behavior:auto;}
 .addform{display:flex;gap:6px;margin-top:9px;}
 .addform input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--txt);
   border-radius:13px;padding:14px 12px;font-size:15px;font-family:inherit;}
@@ -220,9 +212,8 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
     · 버튼을 누르면 바로 저장됩니다. 브라우저를 닫거나 새로고침해도 숫자가 유지되고, 인터넷이 없어도 작동합니다.<br>
     · <b>총 환자수</b>와 각 <b>세부 항목</b>은 따로 세어집니다. 예: 환자가 들어오면 큰 버튼 1회 → 진단이 확정되면 해당 항목도 1회.<br>
     · 오른쪽 <b>−</b> 버튼으로 개별 취소, <b>실행 취소</b>로 마지막 동작을 되돌립니다.<br>
-    · <b>✏️ 편집</b>에서 항목 추가·이름 변경·삭제가 됩니다. 왼쪽 <b>색칸</b>을 누르면 색이 바뀌고,
+    · <b>✏️ 편집</b>에서 항목 추가·이름 변경·순서 이동·삭제가 됩니다. 왼쪽 <b>색칸</b>을 누르면 색이 바뀌고,
       <b>삭제</b>는 실수 방지를 위해 두 번 눌러야 지워집니다.<br>
-    · 순서를 바꾸려면 편집 모드에서 <b>☰ 손잡이</b>를 잡고 위아래로 끄세요. 목록 끝으로 끌면 화면이 따라 스크롤됩니다.<br>
     · 컴퓨터에서는 <b>Space</b> = 총원 +1, <b>1~9</b> = 해당 항목 +1.<br>
     · 홈 화면에 추가해두면 앱처럼 바로 열 수 있습니다.
   </p>
@@ -338,7 +329,6 @@ function render(){
     var n=D.c[cat.id]||0;
     var el=document.createElement("div");
     el.className="cat"+(editMode?" edit":"");
-    el.setAttribute("data-id",cat.id);
     el.innerHTML=
       '<div class="catmain">'+
         '<div class="dot" style="background:'+cat.color+'"></div>'+
@@ -363,17 +353,13 @@ function render(){
       inp.value=cat.name; inp.setAttribute("data-rename",cat.id);
       row.appendChild(inp);
 
-      var grip=document.createElement("button");
-      grip.className="grip"; grip.innerHTML="&#9776;";
-      grip.setAttribute("data-grip",cat.id);
-      grip.setAttribute("aria-label","끌어서 순서 바꾸기");
-      grip.title="길게 잡고 위아래로 끄세요";
-
+      var up=document.createElement("button"); up.textContent="▲"; up.setAttribute("data-up",cat.id);
+      var dn=document.createElement("button"); dn.textContent="▼"; dn.setAttribute("data-down",cat.id);
       var del=document.createElement("button");
       del.className="del"+(pendingDel===cat.id?" armed":"");
       del.textContent=(pendingDel===cat.id?"정말?":"삭제");
       del.setAttribute("data-del",cat.id);
-      row.appendChild(grip); row.appendChild(del);
+      row.appendChild(up); row.appendChild(dn); row.appendChild(del);
       el.appendChild(row);
     }
     host.appendChild(el);
@@ -452,74 +438,6 @@ document.addEventListener("click",function(e){
     if(to>=0&&to<S.cats.length){ var m=S.cats.splice(idx,1)[0]; S.cats.splice(to,0,m); save(); render(); }
   }
 });
-
-/* ───────── 끌어서 순서 바꾸기 (터치/마우스 공용) ───────── */
-var dragEl=null, dragY=0, scrollRAF=null;
-
-function cardsExcept(el){
-  var out=[], ch=$("cats").children, i;
-  for(i=0;i<ch.length;i++) if(ch[i]!==el) out.push(ch[i]);
-  return out;
-}
-
-function placeAt(y){
-  if(!dragEl) return;
-  var host=$("cats"), list=cardsExcept(dragEl), i, r;
-  for(i=0;i<list.length;i++){
-    r=list[i].getBoundingClientRect();
-    if(y < r.top + r.height/2){
-      if(dragEl.nextSibling!==list[i]) host.insertBefore(dragEl,list[i]);
-      return;
-    }
-  }
-  if(host.lastChild!==dragEl) host.appendChild(dragEl);
-}
-
-function edgeScroll(){
-  if(!dragEl){ scrollRAF=null; return; }
-  var h=window.innerHeight, sp=0;
-  if(dragY < 110) sp = -Math.min(18,(110-dragY)/5);
-  else if(dragY > h-130) sp = Math.min(18,(dragY-(h-130))/5);
-  if(sp) { window.scrollBy(0,sp); placeAt(dragY); }
-  scrollRAF=requestAnimationFrame(edgeScroll);
-}
-
-document.addEventListener("pointerdown",function(e){
-  var g=e.target.closest && e.target.closest("[data-grip]");
-  if(!g) return;
-  e.preventDefault();
-  dragEl=g.closest(".cat");
-  if(!dragEl){ return; }
-  dragY=e.clientY;
-  dragEl.classList.add("dragging");
-  document.body.classList.add("dragging-on");
-  try{ g.setPointerCapture(e.pointerId); }catch(err){}
-  if(!scrollRAF) scrollRAF=requestAnimationFrame(edgeScroll);
-  buzz(14);
-},{passive:false});
-
-document.addEventListener("pointermove",function(e){
-  if(!dragEl) return;
-  e.preventDefault();
-  dragY=e.clientY;
-  placeAt(dragY);
-},{passive:false});
-
-function endDrag(){
-  if(!dragEl) return;
-  dragEl.classList.remove("dragging");
-  document.body.classList.remove("dragging-on");
-  dragEl=null;
-  if(scrollRAF){ cancelAnimationFrame(scrollRAF); scrollRAF=null; }
-
-  /* 화면에 보이는 순서를 그대로 데이터에 반영 */
-  var order=[], ch=$("cats").children, i;
-  for(i=0;i<ch.length;i++) order.push(ch[i].getAttribute("data-id"));
-  S.cats.sort(function(a,b){ return order.indexOf(a.id)-order.indexOf(b.id); });
-  save(); render(); buzz(26);
-}
-document.addEventListener("pointerup",endDrag);
-document.addEventListener("pointercancel",endDrag);
 
 document.addEventListener("input",function(e){
   var id=e.target.getAttribute&&e.target.getAttribute("data-rename");
