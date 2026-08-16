@@ -119,6 +119,19 @@ body.dragging-on .cats{scroll-behavior:auto;}
   border-radius:13px;padding:14px 12px;font-size:15px;font-family:inherit;}
 .addform button{flex:none;background:var(--accent);color:#052436;border:0;border-radius:13px;
   padding:0 18px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.guardbtn{width:100%;margin-top:8px;background:var(--panel);border:1px solid var(--line);
+  color:var(--muted);border-radius:13px;padding:12px;font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer;text-align:left;}
+.guardbtn.on{color:var(--ok);border-color:#2f6b52;background:#12271f;}
+.mismatch{font-size:11.5px;font-weight:700;color:#ffd0d0;background:#5b1d1d;
+  border:1px solid #8d3a3a;border-radius:9px;padding:6px 9px;margin:0 0 10px;line-height:1.45;}
+@keyframes shakeflash{
+  0%{transform:translateX(0)}  15%{transform:translateX(-7px)}
+  30%{transform:translateX(7px)} 45%{transform:translateX(-5px)}
+  60%{transform:translateX(5px)} 75%{transform:translateX(-2px)} 100%{transform:translateX(0)}
+}
+.total.blocked{animation:shakeflash .38s ease;border-color:var(--danger);}
+.total.blocked .num{color:#ffb4b4;}
 .acts button.danger.armed{background:var(--danger);color:#3b0a0a;border-color:var(--danger);}
 
 .addbtn{
@@ -194,9 +207,10 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
     <button id="nextDay">›</button>
   </div>
 
-  <div class="total">
+  <div class="total" id="totalBox">
     <div class="lab">오늘 총 환자수 · TOTAL</div>
     <div class="num" id="totalNum">0</div>
+    <div class="mismatch" id="mismatch" style="display:none"></div>
     <div class="row">
       <button class="minibtn" id="totalMinus">−</button>
       <button class="bigbtn" id="totalPlus">＋ 환자 1명</button>
@@ -208,6 +222,7 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
     <input id="newCatName" type="text" placeholder="새 항목 이름 (예: 고혈압)" enterkeyhint="done">
     <button id="addCat">＋ 추가</button>
   </div>
+  <button class="guardbtn" id="guardBtn" style="display:none"></button>
 
   <div class="acts">
     <button id="undoBtn">↩︎ 실행 취소</button>
@@ -223,9 +238,12 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
     · <b>✏️ 편집</b>에서 항목 추가·이름 변경·삭제가 됩니다. 왼쪽 <b>색칸</b>을 누르면 색이 바뀌고,
       <b>삭제</b>는 실수 방지를 위해 두 번 눌러야 지워집니다.<br>
     · 순서를 바꾸려면 편집 모드에서 <b>☰ 손잡이</b>를 잡고 위아래로 끄세요. 목록 끝으로 끌면 화면이 따라 스크롤됩니다.<br>
+    · 세부 항목은 <b>총 환자수를 넘을 수 없습니다.</b> 초과하려 하면 화면이 흔들리며 막힙니다 —
+      <b>＋환자 1명</b>을 먼저 눌렀는지 확인하세요. (편집 모드에서 이 제한을 끌 수 있습니다.)<br>
     · 컴퓨터에서는 <b>Space</b> = 총원 +1, <b>1~9</b> = 해당 항목 +1.<br>
     · 홈 화면에 추가해두면 앱처럼 바로 열 수 있습니다.
   </p>
+  <p style="text-align:center;font-size:11px;color:#63748f;margin:14px 0 0">버전 v5</p>
 </div>
 
 <div class="modal" id="statsModal">
@@ -381,11 +399,63 @@ function render(){
 
   $("addForm").style.display = editMode? "flex":"none";
   $("undoBtn").disabled = !(S.log && S.log.length);
+
+  /* 총원 초과 방지 스위치 (편집 모드에서만 보임) */
+  var gb=$("guardBtn"), on=(S.guard!==false);
+  gb.style.display = editMode? "block":"none";
+  gb.classList.toggle("on", on);
+  gb.textContent = on
+    ? "✓ 총원 초과 방지  켜짐 — 세부 항목이 총 환자수를 넘지 못합니다 (권장)"
+    : "✕ 총원 초과 방지  꺼짐 — 제한 없이 셉니다";
+
+  /* 이미 어긋난 기록이 있으면 알려준다 */
+  var ms=maxSub(D), mm=$("mismatch");
+  if(ms.n > (D.total||0)){
+    mm.style.display="block";
+    mm.textContent="⚠ ‘"+ms.name+"’("+ms.n+")가 총 환자수("+(D.total||0)+")보다 많습니다. 확인해 주세요.";
+  }else{
+    mm.style.display="none";
+  }
 }
 
 /* ───────── actions ───────── */
+/* 세부 항목 중 가장 큰 값 — 총원은 이 값보다 작을 수 없다 */
+function maxSub(D){
+  var m=0, nm="";
+  S.cats.forEach(function(c){ var v=D.c[c.id]||0; if(v>m){ m=v; nm=c.name; } });
+  return {n:m, name:nm};
+}
+function blockFeedback(){
+  var box=$("totalBox");
+  box.classList.remove("blocked");
+  void box.offsetWidth;              /* 애니메이션 재시작 */
+  box.classList.add("blocked");
+  setTimeout(function(){ box.classList.remove("blocked"); },420);
+  buzz([35,55,35]);
+}
+
 function bump(key,delta,silent){
   var D=day(cur);
+  var guard = (S.guard!==false);
+
+  /* 세부 항목은 총원을 넘을 수 없다 */
+  if(guard && delta>0 && key!=="__total__"){
+    if((D.c[key]||0)+1 > (D.total||0)){
+      blockFeedback();
+      toast("총 환자수("+(D.total||0)+"명)를 넘을 수 없습니다");
+      return false;
+    }
+  }
+  /* 총원을 세부 항목 최대값 아래로 내릴 수 없다 */
+  if(guard && delta<0 && key==="__total__"){
+    var ms=maxSub(D);
+    if((D.total||0)-1 < ms.n){
+      blockFeedback();
+      toast("‘"+ms.name+"’("+ms.n+")보다 적어질 수 없습니다");
+      return false;
+    }
+  }
+
   if(key==="__total__"){
     D.total=Math.max(0,(D.total||0)+delta);
   }else{
@@ -393,6 +463,7 @@ function bump(key,delta,silent){
   }
   if(delta>0 && !silent) S.log.push({d:cur,k:key});
   save(); render();
+  return true;
 }
 
 function undo(){
@@ -409,7 +480,7 @@ function undo(){
 document.addEventListener("click",function(e){
   var t=e.target.closest("[data-add],[data-sub],[data-del],[data-up],[data-down],[data-color]");
   if(!t){ if(pendingDel){ pendingDel=null; render(); } return; }
-  if(t.hasAttribute("data-add")){ bump(t.getAttribute("data-add"),1); buzz(18); }
+  if(t.hasAttribute("data-add")){ if(bump(t.getAttribute("data-add"),1)!==false) buzz(18); }
   else if(t.hasAttribute("data-sub")){ bump(t.getAttribute("data-sub"),-1,true); buzz(30); }
   else if(t.hasAttribute("data-color")){
     var cid=t.getAttribute("data-color");
@@ -530,7 +601,9 @@ document.addEventListener("input",function(e){
 });
 
 $("totalPlus").onclick=function(){ bump("__total__",1); buzz(22); };
-$("totalMinus").onclick=function(){ bump("__total__",-1,true); buzz(30); };
+$("totalMinus").onclick=function(){ if(bump("__total__",-1,true)!==false) buzz(30); };
+$("guardBtn").onclick=function(){ S.guard = (S.guard===false); save(); render(); buzz(14);
+  toast(S.guard!==false? "총원 초과 방지 켜짐":"총원 초과 방지 꺼짐"); };
 $("undoBtn").onclick=undo;
 
 $("editBtn").onclick=function(){
@@ -623,7 +696,12 @@ $("statsBtn").onclick=showStats;
 $("statsClose").onclick=function(){ $("statsModal").classList.remove("open"); };
 $("statsModal").onclick=function(e){ if(e.target===this) this.classList.remove("open"); };
 
-function csvCell(s){ s=String(s); return /[",\n]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s; }
+function csvCell(s){
+  s=String(s);
+  /* 엑셀 수식 주입 방지: =, +, -, @, 탭/캐리지리턴으로 시작하면 앞에 ' 를 붙인다 */
+  if(/^[=+\-@\t\r]/.test(s)) s="'"+s;
+  return /[",\n\r]/.test(s)? '"'+s.replace(/"/g,'""')+'"' : s;
+}
 
 $("csvBtn").onclick=function(){
   var ds=dates();
