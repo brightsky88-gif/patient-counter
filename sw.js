@@ -1,5 +1,5 @@
 /* 환자 카운터 - offline service worker */
-var CACHE = "pcounter-v1";
+var CACHE = "pcounter-v2";
 var ASSETS = [
   "./",
   "./index.html",

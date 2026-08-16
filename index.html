@@ -95,13 +95,23 @@ header h1 span{color:var(--muted);font-weight:500;font-size:12px;display:block;m
 
 /* edit mode */
 .cat.edit .plus{pointer-events:none;opacity:.55;}
-.editrow{display:flex;gap:6px;padding:8px;background:var(--panel2);border-top:1px solid var(--line);}
-.editrow input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--txt);
-  border-radius:9px;padding:9px 10px;font-size:14px;font-family:inherit;}
+.editrow{display:flex;gap:5px;padding:8px;background:var(--panel2);
+  border-top:1px solid var(--line);align-items:stretch;min-width:0;}
+.editrow input{flex:1 1 auto;min-width:0;width:0;background:var(--panel);
+  border:1px solid var(--line);color:var(--txt);
+  border-radius:9px;padding:9px 8px;font-size:14px;font-family:inherit;}
 .editrow button{background:var(--panel);border:1px solid var(--line);color:var(--muted);
-  border-radius:9px;padding:0 12px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;
-  white-space:nowrap;flex:none;}
+  border-radius:9px;padding:0 9px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;
+  white-space:nowrap;flex:0 0 auto;min-height:38px;}
 .editrow button.del{color:var(--danger);}
+.editrow button.del.armed{background:var(--danger);color:#3b0a0a;border-color:var(--danger);}
+.swatch{flex:0 0 auto;width:34px;border-radius:9px;border:1px solid var(--line);cursor:pointer;padding:0;}
+.addform{display:flex;gap:6px;margin-top:9px;}
+.addform input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--txt);
+  border-radius:13px;padding:14px 12px;font-size:15px;font-family:inherit;}
+.addform button{flex:none;background:var(--accent);color:#052436;border:0;border-radius:13px;
+  padding:0 18px;font-size:15px;font-weight:800;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.acts button.danger.armed{background:var(--danger);color:#3b0a0a;border-color:var(--danger);}
 
 .addbtn{
   width:100%;background:transparent;border:1.5px dashed var(--line);color:var(--muted);
@@ -186,7 +196,10 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
   </div>
 
   <div class="cats" id="cats"></div>
-  <button class="addbtn" id="addCat" style="display:none">＋ 항목 추가</button>
+  <div class="addform" id="addForm" style="display:none">
+    <input id="newCatName" type="text" placeholder="새 항목 이름 (예: 고혈압)" enterkeyhint="done">
+    <button id="addCat">＋ 추가</button>
+  </div>
 
   <div class="acts">
     <button id="undoBtn">↩︎ 실행 취소</button>
@@ -199,6 +212,8 @@ tr.sum td{font-weight:800;color:var(--accent);border-top:2px solid var(--line);}
     · 버튼을 누르면 바로 저장됩니다. 브라우저를 닫거나 새로고침해도 숫자가 유지되고, 인터넷이 없어도 작동합니다.<br>
     · <b>총 환자수</b>와 각 <b>세부 항목</b>은 따로 세어집니다. 예: 환자가 들어오면 큰 버튼 1회 → 진단이 확정되면 해당 항목도 1회.<br>
     · 오른쪽 <b>−</b> 버튼으로 개별 취소, <b>실행 취소</b>로 마지막 동작을 되돌립니다.<br>
+    · <b>✏️ 편집</b>에서 항목 추가·이름 변경·순서 이동·삭제가 됩니다. 왼쪽 <b>색칸</b>을 누르면 색이 바뀌고,
+      <b>삭제</b>는 실수 방지를 위해 두 번 눌러야 지워집니다.<br>
     · 컴퓨터에서는 <b>Space</b> = 총원 +1, <b>1~9</b> = 해당 항목 +1.<br>
     · 홈 화면에 추가해두면 앱처럼 바로 열 수 있습니다.
   </p>
@@ -233,13 +248,26 @@ function save(){
 
 var PALETTE=["#38bdf8","#34d399","#fbbf24","#f472b6","#a78bfa","#fb923c","#4ade80","#60a5fa","#f87171"];
 
+/* 현재 쓰이지 않는 색을 우선 배정 (없으면 가장 적게 쓰인 색) */
+function pickColor(){
+  var used={}, i;
+  for(i=0;i<S.cats.length;i++){ var c=S.cats[i].color; used[c]=(used[c]||0)+1; }
+  var best=PALETTE[0], bestN=Infinity;
+  for(i=0;i<PALETTE.length;i++){
+    var n=used[PALETTE[i]]||0;
+    if(n===0) return PALETTE[i];
+    if(n<bestN){ bestN=n; best=PALETTE[i]; }
+  }
+  return best;
+}
+
 function defaults(){
   return {
     cats:[
-      {id:"c1",name:"진단 확정 (Diagnosis made)",color:PALETTE[1]},
-      {id:"c2",name:"타과 의뢰 (Referral)",color:PALETTE[2]},
-      {id:"c3",name:"약물 처방 (Prescription)",color:PALETTE[0]},
-      {id:"c4",name:"추적 관찰 필요 (Follow-up)",color:PALETTE[4]}
+      {id:"c1",name:"진단 확정 (Diagnosis made)",color:PALETTE[0]},
+      {id:"c2",name:"타과 의뢰 (Referral)",color:PALETTE[1]},
+      {id:"c3",name:"약물 처방 (Prescription)",color:PALETTE[2]},
+      {id:"c4",name:"추적 관찰 필요 (Follow-up)",color:PALETTE[3]}
     ],
     days:{},        /* "2026-08-16": {total:0, c:{c1:0,...}} */
     log:[],         /* [{d,k}] k="__total__" or cat id */
@@ -250,6 +278,21 @@ function defaults(){
 var S=load();
 if(!S || !S.cats){ S=defaults(); save(); }
 if(!S.log) S.log=[];
+
+/* 기존 사용자: 색이 겹치면 한 번 정리해준다 (숫자 데이터는 건드리지 않음) */
+(function normalizeColors(){
+  var seen={}, changed=false;
+  S.cats.forEach(function(c){
+    if(!c.color || seen[c.color]){
+      var i, used={};
+      S.cats.forEach(function(x){ if(x!==c) used[x.color]=1; });
+      for(i=0;i<PALETTE.length;i++){ if(!used[PALETTE[i]]){ c.color=PALETTE[i]; break; } }
+      changed=true;
+    }
+    seen[c.color]=1;
+  });
+  if(changed) save();
+})();
 
 /* ───────── date ───────── */
 function ymd(d){
@@ -266,6 +309,8 @@ function day(d){
 /* ───────── dom ───────── */
 var $=function(id){return document.getElementById(id);};
 var editMode=false;
+var pendingDel=null;   /* 삭제 2단계 확인 대기중인 항목 id */
+var pendingReset=false;
 
 function toast(msg){
   var t=$("toast"); t.textContent=msg; t.classList.add("show");
@@ -298,19 +343,29 @@ function render(){
     if(editMode){
       var row=document.createElement("div");
       row.className="editrow";
+
+      var sw=document.createElement("button");
+      sw.className="swatch"; sw.style.background=cat.color;
+      sw.setAttribute("data-color",cat.id); sw.title="색 바꾸기";
+      row.appendChild(sw);
+
       var inp=document.createElement("input");
       inp.value=cat.name; inp.setAttribute("data-rename",cat.id);
       row.appendChild(inp);
+
       var up=document.createElement("button"); up.textContent="▲"; up.setAttribute("data-up",cat.id);
       var dn=document.createElement("button"); dn.textContent="▼"; dn.setAttribute("data-down",cat.id);
-      var del=document.createElement("button"); del.className="del"; del.textContent="삭제"; del.setAttribute("data-del",cat.id);
+      var del=document.createElement("button");
+      del.className="del"+(pendingDel===cat.id?" armed":"");
+      del.textContent=(pendingDel===cat.id?"정말?":"삭제");
+      del.setAttribute("data-del",cat.id);
       row.appendChild(up); row.appendChild(dn); row.appendChild(del);
       el.appendChild(row);
     }
     host.appendChild(el);
   });
 
-  $("addCat").style.display = editMode? "block":"none";
+  $("addForm").style.display = editMode? "flex":"none";
   $("undoBtn").disabled = !(S.log && S.log.length);
 }
 
@@ -338,19 +393,43 @@ function undo(){
 }
 
 document.addEventListener("click",function(e){
-  var t=e.target.closest("[data-add],[data-sub],[data-del],[data-up],[data-down]");
-  if(!t) return;
+  var t=e.target.closest("[data-add],[data-sub],[data-del],[data-up],[data-down],[data-color]");
+  if(!t){ if(pendingDel){ pendingDel=null; render(); } return; }
   if(t.hasAttribute("data-add")){ bump(t.getAttribute("data-add"),1); buzz(18); }
   else if(t.hasAttribute("data-sub")){ bump(t.getAttribute("data-sub"),-1,true); buzz(30); }
+  else if(t.hasAttribute("data-color")){
+    var cid=t.getAttribute("data-color");
+    var cc=S.cats.filter(function(x){return x.id===cid;})[0];
+    if(cc){
+      /* 다른 항목이 쓰지 않는 다음 색으로 (한 바퀴 돌면 그냥 다음 색) */
+      var used={};
+      S.cats.forEach(function(x){ if(x!==cc) used[x.color]=1; });
+      var pi=PALETTE.indexOf(cc.color), k;
+      for(k=1;k<=PALETTE.length;k++){
+        var cand=PALETTE[(pi+k)%PALETTE.length];
+        if(!used[cand]){ cc.color=cand; break; }
+      }
+      if(k>PALETTE.length) cc.color=PALETTE[(pi+1)%PALETTE.length];
+      save(); render(); buzz(12);
+    }
+  }
   else if(t.hasAttribute("data-del")){
     var id=t.getAttribute("data-del");
     var c=S.cats.filter(function(x){return x.id===id;})[0];
-    if(confirm("‘"+(c?c.name:"")+"’ 항목을 삭제할까요?\n(모든 날짜의 해당 숫자도 함께 삭제됩니다)")){
-      S.cats=S.cats.filter(function(x){return x.id!==id;});
-      Object.keys(S.days).forEach(function(d){ delete S.days[d].c[id]; });
-      S.log=S.log.filter(function(l){return l.k!==id;});
-      save(); render();
+    if(pendingDel!==id){
+      /* 1차: 확인 대기 상태로 전환 (오삭제 방지) */
+      pendingDel=id; render(); buzz(12);
+      clearTimeout(window.__delT);
+      window.__delT=setTimeout(function(){ if(pendingDel===id){ pendingDel=null; render(); } },4000);
+      toast("한 번 더 누르면 삭제됩니다");
+      return;
     }
+    pendingDel=null;
+    S.cats=S.cats.filter(function(x){return x.id!==id;});
+    Object.keys(S.days).forEach(function(d){ if(S.days[d].c) delete S.days[d].c[id]; });
+    S.log=S.log.filter(function(l){return l.k!==id;});
+    save(); render(); buzz(40);
+    toast("삭제됨 · "+(c?c.name:""));
   }
   else if(t.hasAttribute("data-up")||t.hasAttribute("data-down")){
     var mid=t.getAttribute("data-up")||t.getAttribute("data-down");
@@ -373,24 +452,41 @@ $("totalMinus").onclick=function(){ bump("__total__",-1,true); buzz(30); };
 $("undoBtn").onclick=undo;
 
 $("editBtn").onclick=function(){
-  editMode=!editMode;
+  editMode=!editMode; pendingDel=null;
   this.classList.toggle("on",editMode);
   this.textContent=editMode? "✓ 완료":"✏️ 편집";
   render();
 };
 
-$("addCat").onclick=function(){
-  var n=prompt("새 항목 이름을 입력하세요\n예) 고혈압, 당뇨, 내과 의뢰, 외과 의뢰");
-  if(!n) return;
-  S.cats.push({id:"c"+(S.seq++),name:n.trim(),color:PALETTE[S.cats.length%PALETTE.length]});
-  save(); render();
-};
+function addCategory(){
+  var box=$("newCatName");
+  var n=(box.value||"").trim();
+  if(!n){ box.focus(); toast("항목 이름을 입력하세요"); return; }
+  S.cats.push({id:"c"+(S.seq++), name:n, color:pickColor()});
+  box.value="";
+  save(); render(); buzz(18);
+  toast("추가됨 · "+n);
+}
+$("addCat").onclick=addCategory;
+$("newCatName").addEventListener("keydown",function(e){
+  if(e.key==="Enter"){ e.preventDefault(); addCategory(); }
+});
 
 $("resetBtn").onclick=function(){
-  if(!confirm(cur+" 기록을 0으로 초기화할까요?")) return;
+  var b=this;
+  if(!pendingReset){
+    pendingReset=true; b.classList.add("armed"); b.textContent="🗑 정말 초기화?";
+    toast("한 번 더 누르면 "+cur+" 기록이 0이 됩니다");
+    clearTimeout(window.__rstT);
+    window.__rstT=setTimeout(function(){
+      pendingReset=false; b.classList.remove("armed"); b.textContent="🗑 오늘 초기화";
+    },4000);
+    return;
+  }
+  pendingReset=false; b.classList.remove("armed"); b.textContent="🗑 오늘 초기화";
   S.days[cur]={total:0,c:{}};
   S.log=S.log.filter(function(l){return l.d!==cur;});
-  save(); render(); toast("초기화되었습니다");
+  save(); render(); buzz(40); toast("초기화되었습니다");
 };
 
 /* date nav */
